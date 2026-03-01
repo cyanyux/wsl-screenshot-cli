@@ -57,6 +57,7 @@ graph LR
 
     subgraph Windows
         PS["PowerShell · STA"]
+        Listener["ClipboardListener"]
         CB["Clipboard"]
     end
 
@@ -65,13 +66,14 @@ graph LR
     end
 
     CLI -- "start / stop / status" --> Poller
-    Poller -- "poll every 500ms" --> GoClient
+    Poller -- "poll every 250ms" --> GoClient
     GoClient -- "stdin / stdout" --> PS
-    PS -- "Win32 + .NET" --> CB
+    CB -- "WM_CLIPBOARDUPDATE" --> Listener
+    PS -- "read image" --> CB
     Poller -- "save & dedup" --> PNG
 ```
 
-A persistent `powershell.exe -STA` subprocess handles all clipboard access via a simple stdin/stdout text protocol (`CHECK` / `UPDATE` / `EXIT`). PowerShell calls `GetClipboardSequenceNumber()` (Win32) to skip clipboard reads when nothing has changed — zero contention with other apps.
+A persistent `powershell.exe -STA` subprocess handles all clipboard access via a simple stdin/stdout text protocol (`CHECK` / `UPDATE` / `EXIT`). PowerShell registers an `AddClipboardFormatListener` window to receive `WM_CLIPBOARDUPDATE` events instead of polling, and pumps Windows messages via `DoEvents()` to keep the STA thread responsive — preventing freezes in Explorer, Snipping Tool, and other apps during clipboard operations.
 
 When a new screenshot is detected, the poller:
 
@@ -111,7 +113,7 @@ wsl-screenshot-cli start --verbose
 | Flag | Short | Default | Description |
 |---|---|---|---|
 | `--daemon` | `-d` | `false` | Run as a background daemon |
-| `--interval` | `-i` | `500` | Polling interval in ms (100–5000) |
+| `--interval` | `-i` | `250` | Polling interval in ms (100–5000) |
 | `--output` | `-o` | `/tmp/.wsl-screenshot-cli/` | Directory to store PNGs |
 | `--verbose` | `-v` | `false` | Log all PowerShell I/O for debugging |
 

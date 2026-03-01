@@ -1,29 +1,99 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-# GetClipboardSequenceNumber returns a counter that increments on every clipboard
-# change. Unlike GetImage(), it does NOT open or lock the clipboard, so polling it
-# at high frequency has zero contention with other apps writing to the clipboard.
-Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();' -Name NativeMethods -Namespace Win32
 
-$lastSeq = [uint32]0
+# ClipboardListener: a NativeWindow that receives WM_CLIPBOARDUPDATE messages
+# via AddClipboardFormatListener. This replaces GetClipboardSequenceNumber polling
+# and, crucially, the main loop pumps messages via DoEvents() so the STA thread
+# stays responsive — preventing Explorer/Snipping Tool freezes.
+Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
+using System;
+using System.Windows.Forms;
+using System.Runtime.InteropServices;
+
+public class ClipboardListener : NativeWindow, IDisposable {
+    private const int WM_CLIPBOARDUPDATE = 0x031D;
+
+    [DllImport("user32.dll")]
+    private static extern bool AddClipboardFormatListener(IntPtr hwnd);
+    [DllImport("user32.dll")]
+    private static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
+    [DllImport("user32.dll")]
+    public static extern bool IsClipboardFormatAvailable(uint format);
+
+    public bool Changed { get; set; }
+
+    public ClipboardListener() {
+        CreateHandle(new CreateParams());
+        AddClipboardFormatListener(Handle);
+    }
+
+    protected override void WndProc(ref Message m) {
+        if (m.Msg == WM_CLIPBOARDUPDATE) {
+            Changed = true;
+        }
+        base.WndProc(ref m);
+    }
+
+    public void Dispose() {
+        RemoveClipboardFormatListener(Handle);
+        DestroyHandle();
+    }
+}
+'@
+
+$listener = New-Object ClipboardListener
 
 [Console]::Out.WriteLine("READY")
 [Console]::Out.Flush()
 
+# Start async stdin read (non-blocking — keeps the STA thread free to pump messages)
+$readTask = [Console]::In.ReadLineAsync()
+
 while ($true) {
-    $line = [Console]::ReadLine()
+    # CRITICAL: pump Windows messages so other apps' clipboard operations
+    # (OLE/COM) don't time out waiting for our STA apartment to respond.
+    [System.Windows.Forms.Application]::DoEvents()
+
+    if (-not $readTask.IsCompleted) {
+        Start-Sleep -Milliseconds 10
+        continue
+    }
+
+    $line = $readTask.Result
     if ($line -eq $null -or $line -eq "EXIT") { break }
 
     if ($line -eq "CHECK") {
         try {
-            # Fast path: skip clipboard access entirely if nothing changed since last check
-            $seq = [Win32.NativeMethods]::GetClipboardSequenceNumber()
-            if ($seq -eq $lastSeq) {
+            # Event-driven: skip if no clipboard change since last check
+            if (-not $listener.Changed) {
                 [Console]::Out.WriteLine("NONE")
                 [Console]::Out.Flush()
+                $readTask = [Console]::In.ReadLineAsync()
                 continue
             }
-            $lastSeq = $seq
+            $listener.Changed = $false
+
+            # Lock-free check: skip if no bitmap format on clipboard
+            # CF_BITMAP=2, CF_DIB=8. Avoids locking for text/file copies.
+            if (-not ([ClipboardListener]::IsClipboardFormatAvailable(2) -or
+                      [ClipboardListener]::IsClipboardFormatAvailable(8))) {
+                [Console]::Out.WriteLine("NONE")
+                [Console]::Out.Flush()
+                $readTask = [Console]::In.ReadLineAsync()
+                continue
+            }
+
+            # Fingerprint check: if all 3 of our formats are still present
+            # (CF_BITMAP=2, CF_UNICODETEXT=13, CF_HDROP=15), the clipboard
+            # still holds our previous write — no new image to process.
+            if ([ClipboardListener]::IsClipboardFormatAvailable(2) -and
+                [ClipboardListener]::IsClipboardFormatAvailable(13) -and
+                [ClipboardListener]::IsClipboardFormatAvailable(15)) {
+                [Console]::Out.WriteLine("NONE")
+                [Console]::Out.Flush()
+                $readTask = [Console]::In.ReadLineAsync()
+                continue
+            }
 
             $img = [System.Windows.Forms.Clipboard]::GetImage()
             if ($img -eq $null) {
@@ -65,8 +135,8 @@ while ($true) {
                 $data.SetFileDropList($files)
 
                 [System.Windows.Forms.Clipboard]::SetDataObject($data, $true)
-                # Capture new seq so the next CHECK doesn't re-read our own write
-                $lastSeq = [Win32.NativeMethods]::GetClipboardSequenceNumber()
+                # Suppress the WM_CLIPBOARDUPDATE from our own write
+                $listener.Changed = $false
                 [Console]::Out.WriteLine("OK")
                 [Console]::Out.Flush()
             } finally {
@@ -77,4 +147,9 @@ while ($true) {
             [Console]::Out.Flush()
         }
     }
+
+    # Start next async read
+    $readTask = [Console]::In.ReadLineAsync()
 }
+
+$listener.Dispose()
