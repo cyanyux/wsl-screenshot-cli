@@ -32,7 +32,7 @@ detect_arch() {
 }
 
 detect_os() {
-    if ! command -v wslinfo &>/dev/null || ! wslinfo --version &>/dev/null; then
+    if ! command -v wslinfo &>/dev/null || { ! wslinfo --wsl-version &>/dev/null && ! wslinfo --version &>/dev/null; }; then
         error "WSL2 not detected. This tool only runs inside WSL2."
     fi
     echo "linux"
