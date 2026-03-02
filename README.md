@@ -39,10 +39,43 @@ cd wsl-screenshot-cli
 go build -o wsl-screenshot-cli .
 ```
 
-To start automatically with every WSL session, add to your `~/.bashrc`:
+### Auto-start options
+
+**Option 1** — Auto-start with your shell (add to `~/.bashrc` or `~/.zshrc`):
 
 ```bash
 wsl-screenshot-cli start --daemon
+```
+
+**Option 2** — Auto-start/stop with Claude Code hooks (add to `~/.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "wsl-screenshot-cli start --daemon 2>/dev/null; echo 'wsl-screenshot-cli started'"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "wsl-screenshot-cli stop 2>/dev/null"
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
 
 ## How It Works

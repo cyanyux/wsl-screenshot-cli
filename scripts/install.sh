@@ -153,9 +153,38 @@ main() {
     echo ""
     info "Installation complete! Run '${BINARY} --help' to get started."
     echo ""
-    echo "To start automatically with every WSL session, add to your ~/.bashrc (or ~/.zshrc):"
+    echo "Option 1 — Auto-start with your shell (add to ~/.bashrc or ~/.zshrc):"
     echo ""
     echo "  wsl-screenshot-cli start --daemon"
+    echo ""
+    echo "Option 2 — Auto-start/stop with Claude Code hooks (add to ~/.claude/settings.json):"
+    echo ""
+    echo '  {
+    "hooks": {
+      "SessionStart": [
+        {
+          "matcher": "",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "wsl-screenshot-cli start --daemon 2>/dev/null; echo '\''wsl-screenshot-cli started'\''"
+            }
+          ]
+        }
+      ],
+      "SessionEnd": [
+        {
+          "matcher": "",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "wsl-screenshot-cli stop 2>/dev/null"
+            }
+          ]
+        }
+      ]
+    }
+  }'
 }
 
 main "$@"
