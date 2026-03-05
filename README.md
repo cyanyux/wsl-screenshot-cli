@@ -20,7 +20,7 @@ wsl-screenshot-cli update           # update to latest version
 ### Quick install (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Nailuu/wsl-screenshot-cli/main/scripts/install.sh | bash
+curl -fsSL https://nailu.dev/wscli/install.sh | bash
 ```
 
 This downloads the latest binary to `~/.local/bin/`. No Go toolchain required.

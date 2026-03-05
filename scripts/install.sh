@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Install script for wsl-screenshot-cli
-# Usage: curl -fsSL https://raw.githubusercontent.com/Nailuu/wsl-screenshot-cli/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://nailu.dev/wscli/install.sh | bash
 
 REPO="Nailuu/wsl-screenshot-cli"
 BINARY="wsl-screenshot-cli"
