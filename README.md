@@ -155,6 +155,7 @@ wsl-screenshot-cli start --verbose
 | `--daemon` | `-d` | `false` | Run as a background daemon |
 | `--interval` | `-i` | `250` | Polling interval in ms (100–5000) |
 | `--output` | `-o` | `/tmp/.wsl-screenshot-cli/` | Directory to store PNGs |
+| `--quiet` | `-q` | `false` | Suppress informational messages |
 | `--verbose` | `-v` | `false` | Log all PowerShell I/O for debugging |
 
 ### Status
