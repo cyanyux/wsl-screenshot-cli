@@ -44,8 +44,10 @@ go build -o wsl-screenshot-cli .
 **Option 1** — Auto-start with your shell (add to `~/.bashrc` or `~/.zshrc`):
 
 ```bash
-wsl-screenshot-cli start --daemon
+wsl-screenshot-cli start --daemon --quiet
 ```
+
+> **Tip:** The `--quiet` flag prevents the `Polling process is already running` message from appearing each time you open a new terminal.
 
 > **Note:** The install script places the binary in `~/.local/bin/`, which is typically added to PATH by `~/.profile` (login shells only). If you get `command not found` in `.bashrc`, add this **before** the line above:
 > ```bash
@@ -65,7 +67,7 @@ wsl-screenshot-cli start --daemon
         "hooks": [
           {
             "type": "command",
-            "command": "wsl-screenshot-cli start --daemon 2>/dev/null; echo 'wsl-screenshot-cli started'"
+            "command": "wsl-screenshot-cli start --daemon --quiet 2>/dev/null; echo 'wsl-screenshot-cli started'"
           }
         ]
       }
