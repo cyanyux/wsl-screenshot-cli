@@ -19,12 +19,7 @@ var CheckWSLEnvironment = func() error {
 	if err := exec.Command("wslinfo", "--version").Run(); err == nil {
 		return nil
 	}
-	// Fallback: check if wslinfo binary exists at all (some WSL versions
-	// ship wslinfo without --wsl-version / --version support)
-	if _, err := exec.LookPath("wslinfo"); err == nil {
-		return nil
-	}
-	// Last resort: look for "WSL2" in /proc/version
+	// Fallback: look for "WSL2" in /proc/version
 	if data, err := os.ReadFile("/proc/version"); err == nil {
 		if strings.Contains(strings.ToUpper(string(data)), "WSL2") {
 			return nil
