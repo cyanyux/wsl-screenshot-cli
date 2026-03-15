@@ -19,9 +19,10 @@ var CheckWSLEnvironment = func() error {
 	if err := exec.Command("wslinfo", "--version").Run(); err == nil {
 		return nil
 	}
-	// Fallback: look for "WSL2" in /proc/version
+	// Fallback: look for WSL indicators in /proc/version
 	if data, err := os.ReadFile("/proc/version"); err == nil {
-		if strings.Contains(strings.ToUpper(string(data)), "WSL2") {
+		lower := strings.ToLower(string(data))
+		if strings.Contains(lower, "wsl") || strings.Contains(lower, "microsoft") {
 			return nil
 		}
 	}
