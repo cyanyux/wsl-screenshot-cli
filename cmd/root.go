@@ -19,11 +19,13 @@ them pasteable in WSL (e.g. Claude Code CLI, Codex CLI, ...) while preserving
 Windows paste functionality.
 
 A persistent powershell.exe -STA subprocess handles all clipboard access
-via a stdin/stdout text protocol (CHECK / UPDATE / EXIT). PowerShell registers
-an AddClipboardFormatListener window to receive WM_CLIPBOARDUPDATE events
-instead of polling, and pumps Windows messages via DoEvents() to keep the
-STA thread responsive. When a new bitmap is detected, it saves the PNG (deduplicated by SHA256
-hash) and sets three clipboard formats at once:
+via a stdin/stdout text protocol (CHECK / UPDATE / EXIT). The Go side polls
+by sending CHECK commands; PowerShell uses pre-compiled .NET Clipboard APIs
+(System.Windows.Forms.Clipboard) for change detection — no runtime C#
+compilation, so it works even when EDR products block csc.exe. DoEvents()
+pumps Windows messages to keep the STA thread responsive. When a new bitmap
+is detected, it saves the PNG (deduplicated by SHA256 hash) and sets three
+clipboard formats at once:
 
   CF_UNICODETEXT  — WSL path to the PNG, so you can paste in WSL terminals
   CF_BITMAP       — the original image data, preserving normal image paste

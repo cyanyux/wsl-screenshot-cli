@@ -99,7 +99,7 @@ graph LR
 
     subgraph Windows
         PS["PowerShell · STA"]
-        Listener["ClipboardListener"]
+        DotNet[".NET Clipboard API"]
         CB["Clipboard"]
     end
 
@@ -110,12 +110,12 @@ graph LR
     CLI -- "start / stop / status" --> Poller
     Poller -- "poll every 250ms" --> GoClient
     GoClient -- "stdin / stdout" --> PS
-    CB -- "WM_CLIPBOARDUPDATE" --> Listener
-    PS -- "read image" --> CB
+    PS -- "CHECK" --> DotNet
+    DotNet -- "read image" --> CB
     Poller -- "save & dedup" --> PNG
 ```
 
-A persistent `powershell.exe -STA` subprocess handles all clipboard access via a simple stdin/stdout text protocol (`CHECK` / `UPDATE` / `EXIT`). PowerShell registers an `AddClipboardFormatListener` window to receive `WM_CLIPBOARDUPDATE` events instead of polling, and pumps Windows messages via `DoEvents()` to keep the STA thread responsive — preventing freezes in Explorer, Snipping Tool, and other apps during clipboard operations.
+A persistent `powershell.exe -STA` subprocess handles all clipboard access via a simple stdin/stdout text protocol (`CHECK` / `UPDATE` / `EXIT`). The Go side polls by sending `CHECK` commands; PowerShell uses pre-compiled .NET Clipboard APIs (`System.Windows.Forms.Clipboard`) for change detection — no runtime C# compilation, so it works even when EDR products (SentinelOne, CrowdStrike, etc.) block `csc.exe`. `DoEvents()` pumps Windows messages to keep the STA thread responsive — preventing freezes in Explorer, Snipping Tool, and other apps during clipboard operations.
 
 When a new screenshot is detected, the poller:
 
