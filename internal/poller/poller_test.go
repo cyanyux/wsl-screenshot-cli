@@ -1,6 +1,7 @@
 package poller
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -71,9 +72,6 @@ func overrideLinuxClipboardSync(t *testing.T, fn func(*log.Logger, []byte) error
 
 func resetLinuxClipboardPath(t *testing.T) {
 	t.Helper()
-	orig := lastLinuxClipboardPath
-	lastLinuxClipboardPath = ""
-	t.Cleanup(func() { lastLinuxClipboardPath = orig })
 }
 
 // --- hashBytes tests ---
@@ -368,8 +366,11 @@ func TestPoll_RefreshesLinuxClipboardFromManagedPath(t *testing.T) {
 	})
 
 	mock := &mockClipboard{
-		checkFunc:  func() ([]byte, string, error) { return nil, filePath, nil },
-		updateFunc: func(wsl, win string) error { t.Fatal("UpdateClipboard should not run for managed path refresh"); return nil },
+		checkFunc: func() ([]byte, string, error) { return nil, filePath, nil },
+		updateFunc: func(wsl, win string) error {
+			t.Fatal("UpdateClipboard should not run for managed path refresh")
+			return nil
+		},
 	}
 
 	if err := poll(mock, testLogger(), dir); err != nil {
@@ -381,8 +382,45 @@ func TestPoll_RefreshesLinuxClipboardFromManagedPath(t *testing.T) {
 	}
 }
 
+func TestPoll_UnreadableManagedPathWarnsOncePerClipboardValue(t *testing.T) {
+	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "missing.png")
+
+	overrideLinuxClipboardSync(t, func(_ *log.Logger, pngData []byte) error {
+		t.Fatal("syncLinuxClipboardImage should not run for unreadable managed path")
+		return nil
+	})
+
+	mock := &mockClipboard{
+		checkFunc: func() ([]byte, string, error) { return nil, filePath, nil },
+		updateFunc: func(wsl, win string) error {
+			t.Fatal("UpdateClipboard should not run for unreadable managed path")
+			return nil
+		},
+	}
+
+	var buf bytes.Buffer
+	logger := log.New(&buf, "", 0)
+	state := &runtimeState{}
+
+	if err := pollWithState(mock, logger, dir, state); err != nil {
+		t.Fatalf("first poll() returned error: %v", err)
+	}
+	if err := pollWithState(mock, logger, dir, state); err != nil {
+		t.Fatalf("second poll() returned error: %v", err)
+	}
+
+	if got := bytes.Count(buf.Bytes(), []byte("Warning: managed clipboard path unreadable")); got != 1 {
+		t.Fatalf("warning count = %d, want 1", got)
+	}
+}
+
 func TestRun_ShutdownClosesLatestClient(t *testing.T) {
 	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	overrideLinuxClipboardSync(t, func(*log.Logger, []byte) error { return nil })
 	checkErr := errors.New("persistent error")
 
 	var clients []*mockClipboard
@@ -391,9 +429,9 @@ func TestRun_ShutdownClosesLatestClient(t *testing.T) {
 	factory := func() (Clipboard, error) {
 		mu.Lock()
 		defer mu.Unlock()
-			m := &mockClipboard{
-				checkFunc: func() ([]byte, string, error) { return nil, "", checkErr },
-			}
+		m := &mockClipboard{
+			checkFunc: func() ([]byte, string, error) { return nil, "", checkErr },
+		}
 		clients = append(clients, m)
 		return m, nil
 	}
@@ -433,6 +471,8 @@ func TestRun_ShutdownClosesLatestClient(t *testing.T) {
 
 func TestIntegration_SignalCausesCloseAndExit(t *testing.T) {
 	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	overrideLinuxClipboardSync(t, func(*log.Logger, []byte) error { return nil })
 	dir := t.TempDir()
 
 	var pollCount atomic.Int32

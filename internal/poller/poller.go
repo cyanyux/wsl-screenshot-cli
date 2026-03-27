@@ -28,7 +28,10 @@ type Clipboard interface {
 type ClientFactory func() (Clipboard, error)
 
 var syncLinuxClipboardImage = linuxclipboard.SyncImage
-var lastLinuxClipboardPath string
+
+type runtimeState struct {
+	lastLinuxClipboardPath string
+}
 
 // Run polls the clipboard at the given interval until the context is cancelled.
 func Run(ctx context.Context, logger *log.Logger, interval int, outputDir string, newClient ClientFactory) error {
@@ -42,6 +45,7 @@ func Run(ctx context.Context, logger *log.Logger, interval int, outputDir string
 	defer ticker.Stop()
 
 	consecutiveErrors := 0
+	state := &runtimeState{}
 
 	for {
 		select {
@@ -49,7 +53,7 @@ func Run(ctx context.Context, logger *log.Logger, interval int, outputDir string
 			logger.Println("Polling process shutting down...")
 			return nil
 		case <-ticker.C:
-			if err := poll(client, logger, outputDir); err != nil {
+			if err := pollWithState(client, logger, outputDir, state); err != nil {
 				consecutiveErrors++
 				logger.Printf("Poll error (%d/%d): %v", consecutiveErrors, maxConsecutiveErrors, err)
 
@@ -72,22 +76,29 @@ func Run(ctx context.Context, logger *log.Logger, interval int, outputDir string
 
 // poll performs a single clipboard check cycle: check -> hash -> dedup -> save -> update.
 func poll(client Clipboard, logger *log.Logger, outputDir string) error {
+	return pollWithState(client, logger, outputDir, &runtimeState{})
+}
+
+func pollWithState(client Clipboard, logger *log.Logger, outputDir string, state *runtimeState) error {
 	pngData, managedPath, err := client.Check()
 	if err != nil {
 		return fmt.Errorf("check clipboard: %w", err)
 	}
 	if pngData == nil && managedPath == "" {
-		lastLinuxClipboardPath = ""
+		state.lastLinuxClipboardPath = ""
 		return nil // no image in clipboard
 	}
 
 	if managedPath != "" {
-		if managedPath == lastLinuxClipboardPath {
+		if managedPath == state.lastLinuxClipboardPath {
 			return nil
 		}
 
 		pngData, err := os.ReadFile(managedPath)
 		if err != nil {
+			// Suppress repeated retries for the same unreadable managed path until
+			// the clipboard contents change again.
+			state.lastLinuxClipboardPath = managedPath
 			logger.Printf("Warning: managed clipboard path unreadable: %v", err)
 			return nil
 		}
@@ -97,7 +108,7 @@ func poll(client Clipboard, logger *log.Logger, outputDir string) error {
 			return nil
 		}
 
-		lastLinuxClipboardPath = managedPath
+		state.lastLinuxClipboardPath = managedPath
 		logger.Printf("Linux clipboard refreshed from managed path: %s", managedPath)
 		return nil
 	}
@@ -135,7 +146,7 @@ func poll(client Clipboard, logger *log.Logger, outputDir string) error {
 		logger.Printf("Warning: Linux clipboard image sync failed: %v", err)
 	}
 
-	lastLinuxClipboardPath = filePath
+	state.lastLinuxClipboardPath = filePath
 	logger.Printf("Clipboard updated (WSL: %s)", filePath)
 	return nil
 }

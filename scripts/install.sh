@@ -117,15 +117,14 @@ add_shell_autostart() {
     cat >> "${HOME}/.bashrc" << 'STARTEOF'
 
 # Auto-start wsl-screenshot-cli (added by installer)
-wsl-screenshot-cli start --daemon 2>/dev/null
+wsl-screenshot-cli start --daemon --quiet 2>/dev/null
 STARTEOF
     success "Added auto-start to ~/.bashrc"
 }
 
 merge_json() {
     local file="$1"
-    local start_cmd="wsl-screenshot-cli start --daemon 2>/dev/null; echo 'wsl-screenshot-cli started'"
-    local stop_cmd="wsl-screenshot-cli stop 2>/dev/null"
+    local start_cmd="wsl-screenshot-cli start --daemon --quiet 2>/dev/null; echo 'wsl-screenshot-cli started'"
 
     local existing="{}"
     if [ -f "$file" ]; then
@@ -135,24 +134,17 @@ merge_json() {
     local result
     result=$(echo "$existing" | jq \
         --arg start_cmd "$start_cmd" \
-        --arg stop_cmd "$stop_cmd" \
         '
-        # Build the new hook entries
         ($start_cmd) as $sc |
-        ($stop_cmd) as $ec |
         {matcher: "", hooks: [{type: "command", command: $sc}]} as $start_entry |
-        {matcher: "", hooks: [{type: "command", command: $ec}]} as $stop_entry |
 
-        # Merge into existing structure
         .hooks //= {} |
         .hooks.SessionStart //= [] |
         .hooks.SessionEnd //= [] |
 
-        # Only add if not already present
-        (if (.hooks.SessionStart | map(.hooks[]?.command) | any(contains("wsl-screenshot-cli")))
-         then . else .hooks.SessionStart += [$start_entry] end) |
-        (if (.hooks.SessionEnd | map(.hooks[]?.command) | any(contains("wsl-screenshot-cli")))
-         then . else .hooks.SessionEnd += [$stop_entry] end)
+        .hooks.SessionStart = ((.hooks.SessionStart // []) | map(select((.hooks // []) | map(.command // "") | any(contains("wsl-screenshot-cli")) | not))) |
+        .hooks.SessionEnd = ((.hooks.SessionEnd // []) | map(select((.hooks // []) | map(.command // "") | any(contains("wsl-screenshot-cli")) | not))) |
+        .hooks.SessionStart += [$start_entry]
         '
     ) || return 1
 
@@ -162,12 +154,6 @@ merge_json() {
 add_claude_hooks() {
     local settings_dir="${HOME}/.claude"
     local settings_file="${settings_dir}/settings.json"
-
-    # Check for existing hooks
-    if [ -f "$settings_file" ] && grep -q "wsl-screenshot-cli" "$settings_file"; then
-        success "Claude Code hooks already configured in ${settings_file}"
-        return
-    fi
 
     if ! command -v jq &>/dev/null; then
         warn "jq is not available — cannot safely merge settings.json"
@@ -192,7 +178,7 @@ add_claude_hooks() {
     echo "$merged" > "$tmpfile"
     mv "$tmpfile" "$settings_file"
 
-    success "Added Claude Code hooks to ${settings_file}"
+    success "Added Claude Code SessionStart hook to ${settings_file}"
 }
 
 setup_menu() {
@@ -207,7 +193,7 @@ setup_menu() {
     info "How would you like to auto-start wsl-screenshot-cli?"
     echo ""
     echo "  1) Add to shell profile (~/.bashrc)"
-    echo "  2) Add Claude Code hooks (~/.claude/settings.json)"
+    echo "  2) Add Claude Code SessionStart hook (~/.claude/settings.json)"
     echo "  3) Both"
     echo "  4) Skip (I'll configure manually)"
     echo ""

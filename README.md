@@ -76,7 +76,7 @@ wsl-screenshot-cli start --daemon --quiet
 > fi
 > ```
 
-**Option 2** — Auto-start/stop with Claude Code hooks (add to `~/.claude/settings.json`):
+**Option 2** — Auto-start with a Claude Code hook (add to `~/.claude/settings.json`):
 
 ```json
 {
@@ -92,20 +92,12 @@ wsl-screenshot-cli start --daemon --quiet
         ]
       }
     ],
-    "SessionEnd": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "wsl-screenshot-cli stop 2>/dev/null"
-          }
-        ]
-      }
-    ]
+    "SessionEnd": []
   }
 }
 ```
+
+Avoid adding a `SessionEnd` stop hook. The daemon is shared across terminals and Claude sessions, so stopping it at the end of one session can break image paste in another session that is still active.
 
 ## How It Works
 
@@ -142,19 +134,18 @@ When a new screenshot is detected, the poller:
 1. Receives the image as base64 PNG from PowerShell
 2. Deduplicates by SHA256 hash and saves to disk
 3. Converts the WSL path to a Windows path via `wslpath -w`
-4. Tells PowerShell to set three Windows clipboard formats at once
+4. Tells PowerShell to refresh the Windows clipboard as an image item
 5. If a Linux clipboard backend is available, mirrors the PNG into the WSL clipboard as `image/png`
 
 ### What Happens When You Paste
 
-After a screenshot is captured, the clipboard contains these formats:
+After a screenshot is captured, the bridge keeps the Windows clipboard as an image item and, when possible, mirrors the same PNG into the Linux clipboard:
 
-| Where you paste | Clipboard format | What you get |
+| Where you paste | Clipboard source | What you get |
 |---|---|---|
-| WSL terminal (Ctrl+Shift+V) | `CF_UNICODETEXT` | File path: `/tmp/.wsl-screenshot-cli/<hash>.png` |
-| Claude Code / WSL GUI apps (Ctrl+V) | Linux clipboard `image/png` | The screenshot as an image |
-| Windows image app (Paint, etc.) | `CF_BITMAP` | The screenshot as an image |
-| Windows Explorer / file dialog | `CF_HDROP` | The PNG file (paste-as-file) |
+| Claude Code / WSL GUI apps (`Ctrl+V`) | Linux clipboard `image/png` | The screenshot as an image |
+| Windows image apps (Paint, etc.) | Windows image clipboard | The screenshot as an image |
+| Windows clipboard history (`Win+V`) | Managed screenshot item | Prior screenshots can be re-selected and mirrored back into the Linux clipboard |
 
 The Linux clipboard mirror is automatic when a supported backend is present:
 
