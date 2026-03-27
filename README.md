@@ -4,6 +4,8 @@ Maintained fork of [`Nailuu/wsl-screenshot-cli`](https://github.com/Nailuu/wsl-s
 
 Original project concept and implementation are by Nailuu. This fork keeps the same core idea, then adds the fixes developed in this workspace for real WSL usage with Claude Code, Codex CLI, and Windows clipboard history.
 
+This README is adapted from the upstream project README, then updated to describe the fork-specific behavior and installation URLs in this repository.
+
 Take a screenshot on Windows, then paste in your WSL terminal and WSL-aware apps without giving up normal Windows clipboard behavior.
 
 ![Demo](assets/demo.gif)
@@ -41,6 +43,7 @@ Compared with upstream, this fork adds:
 - Upstream project: <https://github.com/Nailuu/wsl-screenshot-cli>
 - Original author: Nailuu
 - This fork: packaging, Linux clipboard sync, clipboard-history refresh, and daemon/runtime fixes
+- Demo asset and baseline README structure originate from the upstream project
 
 ### Via Go
 

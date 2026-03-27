@@ -1,0 +1,18 @@
+This repository is a maintained fork of:
+
+  https://github.com/Nailuu/wsl-screenshot-cli
+
+Upstream project and original implementation:
+
+  Copyright (c) 2026 Nailu
+
+Fork-specific modifications in this repository:
+
+  Copyright (c) 2026 cyanyux
+
+This repository is distributed under the MIT License. See LICENSE.
+
+Notes:
+
+- The LICENSE file preserves the original upstream MIT notice and adds the fork copyright notice.
+- The README in this repository is adapted from the upstream project README and updated for fork-specific behavior, installation paths, and feature differences.
