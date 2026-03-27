@@ -1,8 +1,10 @@
 # wsl-screenshot-cli
 
-CLI tool that monitors the Windows clipboard for screenshots, making them pasteable in WSL (e.g. Claude Code CLI, Codex CLI, ...) while preserving Windows paste functionality.
+Maintained fork of [`Nailuu/wsl-screenshot-cli`](https://github.com/Nailuu/wsl-screenshot-cli).
 
-Take a screenshot on Windows, then paste in your WSL terminal — you get a file path. Paste in Paint — you get the image. Paste in Explorer — you get the file. All at the same time.
+Original project concept and implementation are by Nailuu. This fork keeps the same core idea, then adds the fixes developed in this workspace for real WSL usage with Claude Code, Codex CLI, and Windows clipboard history.
+
+Take a screenshot on Windows, then paste in your WSL terminal and WSL-aware apps without giving up normal Windows clipboard behavior.
 
 ![Demo](assets/demo.gif)
 
@@ -25,14 +27,20 @@ curl -fsSL https://raw.githubusercontent.com/cyanyux/wsl-screenshot-cli/main/scr
 
 This downloads the latest binary to `~/.local/bin/`. No Go toolchain required.
 
-### Fork-specific additions
+### Why this fork exists
 
-This fork includes the fixes developed in this workspace:
+Compared with upstream, this fork adds:
 
 - Linux clipboard image mirror for `Ctrl+V` flows that read native `image/png`
 - managed-path refresh so Windows clipboard history (`Win+V`) can restore prior screenshots cleanly
 - safer clipboard handling for Office / PowerPoint text copies that include preview bitmaps
 - daemon lifecycle fixes to prevent duplicate background instances after stop/start races
+
+### Credit
+
+- Upstream project: <https://github.com/Nailuu/wsl-screenshot-cli>
+- Original author: Nailuu
+- This fork: packaging, Linux clipboard sync, clipboard-history refresh, and daemon/runtime fixes
 
 ### Via Go
 
