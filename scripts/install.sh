@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Install script for wsl-screenshot-cli
-# Usage: curl -fsSL https://nailu.dev/wscli/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/cyanyux/wsl-screenshot-cli/main/scripts/install.sh | bash
 
-REPO="Nailuu/wsl-screenshot-cli"
+REPO="cyanyux/wsl-screenshot-cli"
 BINARY="wsl-screenshot-cli"
 INSTALL_DIR="${HOME}/.local/bin"
 
@@ -173,7 +173,7 @@ add_claude_hooks() {
         warn "jq is not available — cannot safely merge settings.json"
         echo ""
         echo "  Add these hooks manually to ~/.claude/settings.json:"
-        echo '  https://github.com/Nailuu/wsl-screenshot-cli#claude-code-hooks'
+        echo '  https://github.com/cyanyux/wsl-screenshot-cli#claude-code-hooks'
         return
     fi
 
@@ -182,7 +182,7 @@ add_claude_hooks() {
     local merged
     if ! merged=$(merge_json "$settings_file"); then
         warn "Failed to merge hooks into ${settings_file}"
-        echo "  Add hooks manually: https://github.com/Nailuu/wsl-screenshot-cli#claude-code-hooks"
+        echo "  Add hooks manually: https://github.com/cyanyux/wsl-screenshot-cli#claude-code-hooks"
         return
     fi
 
@@ -199,7 +199,7 @@ setup_menu() {
     if [ "$INTERACTIVE" = "false" ]; then
         echo ""
         info "Non-interactive mode — skipping auto-start setup."
-        echo "  To configure later, see: https://github.com/Nailuu/wsl-screenshot-cli#auto-start"
+        echo "  To configure later, see: https://github.com/cyanyux/wsl-screenshot-cli#auto-start"
         return
     fi
 
@@ -234,11 +234,11 @@ setup_menu() {
             ;;
         4)
             info "Skipped. Configure auto-start later:"
-            echo "  https://github.com/Nailuu/wsl-screenshot-cli#auto-start"
+            echo "  https://github.com/cyanyux/wsl-screenshot-cli#auto-start"
             ;;
         *)
             warn "Invalid selection '${choice}' — skipping auto-start setup."
-            echo "  Configure later: https://github.com/Nailuu/wsl-screenshot-cli#auto-start"
+            echo "  Configure later: https://github.com/cyanyux/wsl-screenshot-cli#auto-start"
             ;;
     esac
 }

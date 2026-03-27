@@ -38,14 +38,32 @@ while ($true) {
                 continue
             }
 
-            # Fingerprint: if clipboard has image + text + file drop, it still
-            # holds our previous enriched write (SetImage + SetText + SetFileDropList).
-            # Snipping Tool / Win+Shift+S only sets the image format, so the
-            # presence of all three means no new capture has arrived.
-            if ([System.Windows.Forms.Clipboard]::ContainsText() -and
-                [System.Windows.Forms.Clipboard]::ContainsFileDropList()) {
-                [Console]::Out.WriteLine("NONE")
-                [Console]::Out.Flush()
+            # Rich text copies from Office apps often include a preview bitmap
+            # alongside the real text payload. Do not treat those as screenshots.
+            # The only text-bearing image shape we still accept is the legacy
+            # wscli-managed clipboard item from older builds, which included a
+            # text path plus a file drop list.
+            if ([System.Windows.Forms.Clipboard]::ContainsText()) {
+                if ([System.Windows.Forms.Clipboard]::ContainsFileDropList()) {
+                    try {
+                        $text = [System.Windows.Forms.Clipboard]::GetText()
+                        if (-not [string]::IsNullOrWhiteSpace($text)) {
+                            [Console]::Out.WriteLine("PATH")
+                            [Console]::Out.WriteLine($text)
+                            [Console]::Out.WriteLine("END")
+                            [Console]::Out.Flush()
+                        } else {
+                            [Console]::Out.WriteLine("NONE")
+                            [Console]::Out.Flush()
+                        }
+                    } catch {
+                        [Console]::Out.WriteLine("NONE")
+                        [Console]::Out.Flush()
+                    }
+                } else {
+                    [Console]::Out.WriteLine("NONE")
+                    [Console]::Out.Flush()
+                }
                 $readTask = [Console]::In.ReadLineAsync()
                 continue
             }
@@ -83,12 +101,9 @@ while ($true) {
             try {
                 $data = New-Object System.Windows.Forms.DataObject
                 $data.SetImage($img)
-                $data.SetText($wslPath, [System.Windows.Forms.TextDataFormat]::UnicodeText)
-
-                $files = New-Object System.Collections.Specialized.StringCollection
-                [void]$files.Add($winPath)
-                $data.SetFileDropList($files)
-
+                # Clear first so stale wscli text/file-drop formats from an
+                # earlier clipboard item do not survive onto the new image.
+                [System.Windows.Forms.Clipboard]::Clear()
                 [System.Windows.Forms.Clipboard]::SetDataObject($data, $true)
                 [Console]::Out.WriteLine("OK")
                 [Console]::Out.Flush()

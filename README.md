@@ -20,21 +20,30 @@ wsl-screenshot-cli update           # update to latest version
 ### Quick install (recommended)
 
 ```bash
-curl -fsSL https://nailu.dev/wscli/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cyanyux/wsl-screenshot-cli/main/scripts/install.sh | bash
 ```
 
 This downloads the latest binary to `~/.local/bin/`. No Go toolchain required.
 
+### Fork-specific additions
+
+This fork includes the fixes developed in this workspace:
+
+- Linux clipboard image mirror for `Ctrl+V` flows that read native `image/png`
+- managed-path refresh so Windows clipboard history (`Win+V`) can restore prior screenshots cleanly
+- safer clipboard handling for Office / PowerPoint text copies that include preview bitmaps
+- daemon lifecycle fixes to prevent duplicate background instances after stop/start races
+
 ### Via Go
 
 ```bash
-go install github.com/nailuu/wsl-screenshot-cli@latest
+go install github.com/cyanyux/wsl-screenshot-cli@latest
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/Nailuu/wsl-screenshot-cli.git
+git clone https://github.com/cyanyux/wsl-screenshot-cli.git
 cd wsl-screenshot-cli
 go build -o wsl-screenshot-cli .
 ```
@@ -122,17 +131,24 @@ When a new screenshot is detected, the poller:
 1. Receives the image as base64 PNG from PowerShell
 2. Deduplicates by SHA256 hash and saves to disk
 3. Converts the WSL path to a Windows path via `wslpath -w`
-4. Tells PowerShell to set three clipboard formats at once
+4. Tells PowerShell to set three Windows clipboard formats at once
+5. If a Linux clipboard backend is available, mirrors the PNG into the WSL clipboard as `image/png`
 
 ### What Happens When You Paste
 
-After a screenshot is captured, the clipboard contains three formats simultaneously:
+After a screenshot is captured, the clipboard contains these formats:
 
 | Where you paste | Clipboard format | What you get |
 |---|---|---|
 | WSL terminal (Ctrl+Shift+V) | `CF_UNICODETEXT` | File path: `/tmp/.wsl-screenshot-cli/<hash>.png` |
+| Claude Code / WSL GUI apps (Ctrl+V) | Linux clipboard `image/png` | The screenshot as an image |
 | Windows image app (Paint, etc.) | `CF_BITMAP` | The screenshot as an image |
 | Windows Explorer / file dialog | `CF_HDROP` | The PNG file (paste-as-file) |
+
+The Linux clipboard mirror is automatic when a supported backend is present:
+
+- `wl-copy` on Wayland / WSLg
+- `xclip` on X11
 
 ## Usage
 
@@ -179,6 +195,14 @@ Log file:     /tmp/.wsl-screenshot-cli.log
 ```bash
 wsl-screenshot-cli stop
 ```
+
+### Uninstall
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cyanyux/wsl-screenshot-cli/main/scripts/uninstall.sh | bash
+```
+
+This removes the installed binary and can optionally remove shell auto-start and Claude Code hook entries.
 
 ### Update
 

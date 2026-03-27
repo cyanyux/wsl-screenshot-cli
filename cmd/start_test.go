@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/nailuu/wsl-screenshot-cli/internal/platform"
+	"github.com/cyanyux/wsl-screenshot-cli/internal/platform"
 )
 
 func TestStart_FailsOnWSLCheckError(t *testing.T) {

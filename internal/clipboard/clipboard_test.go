@@ -13,7 +13,7 @@ import (
 )
 
 // TestHelperProcess is invoked by tests as a fake PowerShell subprocess.
-// It speaks the same protocol: READY on start, CHECK→NONE/IMAGE, EXIT→exit.
+// It speaks the same protocol: READY on start, CHECK→NONE/IMAGE/PATH, EXIT→exit.
 func TestHelperProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
 		return
@@ -35,6 +35,10 @@ func TestHelperProcess(t *testing.T) {
 				b64 := base64.StdEncoding.EncodeToString(imgData)
 				fmt.Println("IMAGE")
 				fmt.Println(b64)
+				fmt.Println("END")
+			case "PATH":
+				fmt.Println("PATH")
+				fmt.Println("/tmp/.wsl-screenshot-cli/from-history.png")
 				fmt.Println("END")
 			default:
 				fmt.Println("NONE")
@@ -86,12 +90,15 @@ func TestCheck_ReturnsNone(t *testing.T) {
 	}
 	defer client.Close()
 
-	data, err := client.Check()
+	data, path, err := client.Check()
 	if err != nil {
 		t.Fatalf("Check() error: %v", err)
 	}
 	if data != nil {
 		t.Errorf("Check() = %v, want nil (NONE)", data)
+	}
+	if path != "" {
+		t.Errorf("Check() path = %q, want empty", path)
 	}
 }
 
@@ -107,7 +114,7 @@ func TestCheck_ReturnsImage(t *testing.T) {
 	}
 	defer client.Close()
 
-	data, err := client.Check()
+	data, path, err := client.Check()
 	if err != nil {
 		t.Fatalf("Check() error: %v", err)
 	}
@@ -116,6 +123,33 @@ func TestCheck_ReturnsImage(t *testing.T) {
 	}
 	if string(data) != "fake-png-data-for-test" {
 		t.Errorf("Check() = %q, want %q", data, "fake-png-data-for-test")
+	}
+	if path != "" {
+		t.Errorf("Check() path = %q, want empty", path)
+	}
+}
+
+func TestCheck_ReturnsManagedPath(t *testing.T) {
+	orig := newPSCommand
+	defer func() { newPSCommand = orig }()
+	newPSCommand = helperCommand(t, "HELPER_CHECK_BEHAVIOR=PATH")
+
+	logger := testLogger(t)
+	client, err := NewClient(logger, false)
+	if err != nil {
+		t.Fatalf("NewClient() error: %v", err)
+	}
+	defer client.Close()
+
+	data, path, err := client.Check()
+	if err != nil {
+		t.Fatalf("Check() error: %v", err)
+	}
+	if data != nil {
+		t.Fatalf("Check() data = %q, want nil", data)
+	}
+	if path != "/tmp/.wsl-screenshot-cli/from-history.png" {
+		t.Fatalf("Check() path = %q", path)
 	}
 }
 

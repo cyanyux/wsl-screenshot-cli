@@ -90,9 +90,10 @@ func NewClient(logger *log.Logger, verbose bool) (*Client, error) {
 	}, nil
 }
 
-// Check queries the clipboard for an image. Returns the PNG bytes if an image
-// is present, or nil if the clipboard is empty / contains non-image data.
-func (c *Client) Check() ([]byte, error) {
+// Check queries the clipboard. It returns either raw PNG bytes for a new image
+// capture, or a managed WSL path when Windows clipboard history restores one of
+// our previously enriched items.
+func (c *Client) Check() ([]byte, string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -100,14 +101,14 @@ func (c *Client) Check() ([]byte, error) {
 		c.logger.Println("[ps:send] CHECK")
 	}
 	if _, err := fmt.Fprintln(c.stdin, "CHECK"); err != nil {
-		return nil, fmt.Errorf("send CHECK: %w", err)
+		return nil, "", fmt.Errorf("send CHECK: %w", err)
 	}
 
 	if !c.stdout.Scan() {
 		if err := c.stdout.Err(); err != nil {
-			return nil, fmt.Errorf("read response: %w", err)
+			return nil, "", fmt.Errorf("read response: %w", err)
 		}
-		return nil, fmt.Errorf("powershell process exited")
+		return nil, "", fmt.Errorf("powershell process exited")
 	}
 
 	line := strings.TrimSpace(c.stdout.Text())
@@ -117,11 +118,30 @@ func (c *Client) Check() ([]byte, error) {
 
 	switch line {
 	case "NONE":
-		return nil, nil
+		return nil, "", nil
+	case "PATH":
+		if !c.stdout.Scan() {
+			return nil, "", fmt.Errorf("read managed path: powershell process exited")
+		}
+		path := strings.TrimSpace(c.stdout.Text())
+		if c.verbose {
+			c.logger.Printf("[ps:recv] PATH %s", path)
+		}
+
+		if !c.stdout.Scan() {
+			return nil, "", fmt.Errorf("read END marker: powershell process exited")
+		}
+		if end := strings.TrimSpace(c.stdout.Text()); end != "END" {
+			return nil, "", fmt.Errorf("expected END, got %q", end)
+		}
+		if c.verbose {
+			c.logger.Println("[ps:recv] END")
+		}
+		return nil, path, nil
 	case "IMAGE":
 		// Read base64 data line
 		if !c.stdout.Scan() {
-			return nil, fmt.Errorf("read base64: powershell process exited")
+			return nil, "", fmt.Errorf("read base64: powershell process exited")
 		}
 		b64 := strings.TrimSpace(c.stdout.Text())
 		if c.verbose {
@@ -130,10 +150,10 @@ func (c *Client) Check() ([]byte, error) {
 
 		// Read END marker
 		if !c.stdout.Scan() {
-			return nil, fmt.Errorf("read END marker: powershell process exited")
+			return nil, "", fmt.Errorf("read END marker: powershell process exited")
 		}
 		if end := strings.TrimSpace(c.stdout.Text()); end != "END" {
-			return nil, fmt.Errorf("expected END, got %q", end)
+			return nil, "", fmt.Errorf("expected END, got %q", end)
 		}
 		if c.verbose {
 			c.logger.Println("[ps:recv] END")
@@ -141,16 +161,18 @@ func (c *Client) Check() ([]byte, error) {
 
 		data, err := base64.StdEncoding.DecodeString(b64)
 		if err != nil {
-			return nil, fmt.Errorf("decode base64: %w", err)
+			return nil, "", fmt.Errorf("decode base64: %w", err)
 		}
-		return data, nil
+		return data, "", nil
 	default:
-		return nil, fmt.Errorf("unexpected response: %q", line)
+		return nil, "", fmt.Errorf("unexpected response: %q", line)
 	}
 }
 
-// UpdateClipboard tells PowerShell to load the image from winPath and set
-// all three clipboard formats (image, text with wslPath, file drop with winPath).
+// UpdateClipboard tells PowerShell to load the image from winPath and update
+// Windows clipboard with the image only. The wslPath argument is still passed
+// for compatibility with legacy clipboard-history items created by older builds
+// that stored the path as text plus a file-drop list.
 func (c *Client) UpdateClipboard(wslPath, winPath string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

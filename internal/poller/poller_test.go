@@ -18,18 +18,18 @@ import (
 // mockClipboard implements the Clipboard interface for testing.
 type mockClipboard struct {
 	mu          sync.Mutex
-	checkFunc   func() ([]byte, error)
+	checkFunc   func() ([]byte, string, error)
 	updateFunc  func(wsl, win string) error
 	closeCalled atomic.Bool
 }
 
-func (m *mockClipboard) Check() ([]byte, error) {
+func (m *mockClipboard) Check() ([]byte, string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.checkFunc != nil {
 		return m.checkFunc()
 	}
-	return nil, nil
+	return nil, "", nil
 }
 
 func (m *mockClipboard) UpdateClipboard(wsl, win string) error {
@@ -62,6 +62,20 @@ func fakeWslPath(wslPath string) (string, error) {
 	return `C:\fake\` + filepath.Base(wslPath), nil
 }
 
+func overrideLinuxClipboardSync(t *testing.T, fn func(*log.Logger, []byte) error) {
+	t.Helper()
+	orig := syncLinuxClipboardImage
+	syncLinuxClipboardImage = fn
+	t.Cleanup(func() { syncLinuxClipboardImage = orig })
+}
+
+func resetLinuxClipboardPath(t *testing.T) {
+	t.Helper()
+	orig := lastLinuxClipboardPath
+	lastLinuxClipboardPath = ""
+	t.Cleanup(func() { lastLinuxClipboardPath = orig })
+}
+
 // --- hashBytes tests ---
 
 func TestHashBytes(t *testing.T) {
@@ -88,7 +102,9 @@ func TestHashBytes(t *testing.T) {
 
 func TestPoll_NoImage(t *testing.T) {
 	overrideWslPath(t, fakeWslPath)
-	mock := &mockClipboard{checkFunc: func() ([]byte, error) { return nil, nil }}
+	resetLinuxClipboardPath(t)
+	overrideLinuxClipboardSync(t, func(*log.Logger, []byte) error { return nil })
+	mock := &mockClipboard{checkFunc: func() ([]byte, string, error) { return nil, "", nil }}
 
 	err := poll(mock, testLogger(), t.TempDir())
 	if err != nil {
@@ -98,12 +114,14 @@ func TestPoll_NoImage(t *testing.T) {
 
 func TestPoll_NewScreenshot(t *testing.T) {
 	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	overrideLinuxClipboardSync(t, func(*log.Logger, []byte) error { return nil })
 	dir := t.TempDir()
 	imgData := []byte("fake-png-data")
 
 	var updateWsl, updateWin string
 	mock := &mockClipboard{
-		checkFunc: func() ([]byte, error) { return imgData, nil },
+		checkFunc: func() ([]byte, string, error) { return imgData, "", nil },
 		updateFunc: func(wsl, win string) error {
 			updateWsl = wsl
 			updateWin = win
@@ -136,12 +154,14 @@ func TestPoll_NewScreenshot(t *testing.T) {
 
 func TestPoll_Dedup(t *testing.T) {
 	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	overrideLinuxClipboardSync(t, func(*log.Logger, []byte) error { return nil })
 	dir := t.TempDir()
 	imgData := []byte("same-image")
 	updateCount := 0
 
 	mock := &mockClipboard{
-		checkFunc: func() ([]byte, error) { return imgData, nil },
+		checkFunc: func() ([]byte, string, error) { return imgData, "", nil },
 		updateFunc: func(wsl, win string) error {
 			updateCount++
 			return nil
@@ -162,8 +182,10 @@ func TestPoll_Dedup(t *testing.T) {
 
 func TestPoll_CheckError(t *testing.T) {
 	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	overrideLinuxClipboardSync(t, func(*log.Logger, []byte) error { return nil })
 	checkErr := errors.New("powershell died")
-	mock := &mockClipboard{checkFunc: func() ([]byte, error) { return nil, checkErr }}
+	mock := &mockClipboard{checkFunc: func() ([]byte, string, error) { return nil, "", checkErr }}
 
 	err := poll(mock, testLogger(), t.TempDir())
 	if err == nil {
@@ -178,10 +200,12 @@ func TestPoll_WslPathFailure(t *testing.T) {
 	overrideWslPath(t, func(string) (string, error) {
 		return "", errors.New("wslpath not found")
 	})
+	resetLinuxClipboardPath(t)
+	overrideLinuxClipboardSync(t, func(*log.Logger, []byte) error { return nil })
 	dir := t.TempDir()
 	imgData := []byte("some-image")
 	mock := &mockClipboard{
-		checkFunc: func() ([]byte, error) { return imgData, nil },
+		checkFunc: func() ([]byte, string, error) { return imgData, "", nil },
 	}
 
 	err := poll(mock, testLogger(), dir)
@@ -198,10 +222,12 @@ func TestPoll_WslPathFailure(t *testing.T) {
 
 func TestPoll_UpdateFailure(t *testing.T) {
 	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	overrideLinuxClipboardSync(t, func(*log.Logger, []byte) error { return nil })
 	dir := t.TempDir()
 	imgData := []byte("image-data")
 	mock := &mockClipboard{
-		checkFunc:  func() ([]byte, error) { return imgData, nil },
+		checkFunc:  func() ([]byte, string, error) { return imgData, "", nil },
 		updateFunc: func(wsl, win string) error { return errors.New("update failed") },
 	}
 
@@ -220,6 +246,8 @@ func TestPoll_UpdateFailure(t *testing.T) {
 
 func TestRun_ShutdownCallsClose(t *testing.T) {
 	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	overrideLinuxClipboardSync(t, func(*log.Logger, []byte) error { return nil })
 	mock := &mockClipboard{}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -251,6 +279,8 @@ func TestRun_ShutdownCallsClose(t *testing.T) {
 
 func TestRun_CircuitBreakerRestart(t *testing.T) {
 	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	overrideLinuxClipboardSync(t, func(*log.Logger, []byte) error { return nil })
 	factoryCalls := 0
 	checkErr := errors.New("persistent error")
 
@@ -262,7 +292,7 @@ func TestRun_CircuitBreakerRestart(t *testing.T) {
 		defer mu.Unlock()
 		factoryCalls++
 		m := &mockClipboard{
-			checkFunc: func() ([]byte, error) { return nil, checkErr },
+			checkFunc: func() ([]byte, string, error) { return nil, "", checkErr },
 		}
 		activeMock = m
 		return m, nil
@@ -295,6 +325,62 @@ func TestRun_CircuitBreakerRestart(t *testing.T) {
 	_ = activeMock // just verify it was assigned
 }
 
+func TestPoll_SyncsLinuxClipboardImage(t *testing.T) {
+	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	dir := t.TempDir()
+	imgData := []byte("fake-png-data")
+
+	var synced []byte
+	overrideLinuxClipboardSync(t, func(_ *log.Logger, pngData []byte) error {
+		synced = append([]byte(nil), pngData...)
+		return nil
+	})
+
+	mock := &mockClipboard{
+		checkFunc:  func() ([]byte, string, error) { return imgData, "", nil },
+		updateFunc: func(wsl, win string) error { return nil },
+	}
+
+	if err := poll(mock, testLogger(), dir); err != nil {
+		t.Fatalf("poll() returned error: %v", err)
+	}
+
+	if string(synced) != string(imgData) {
+		t.Fatalf("syncLinuxClipboardImage got %q, want %q", synced, imgData)
+	}
+}
+
+func TestPoll_RefreshesLinuxClipboardFromManagedPath(t *testing.T) {
+	overrideWslPath(t, fakeWslPath)
+	resetLinuxClipboardPath(t)
+	dir := t.TempDir()
+	imgData := []byte("history-image")
+	filePath := filepath.Join(dir, "from-history.png")
+	if err := os.WriteFile(filePath, imgData, 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	var synced []byte
+	overrideLinuxClipboardSync(t, func(_ *log.Logger, pngData []byte) error {
+		synced = append([]byte(nil), pngData...)
+		return nil
+	})
+
+	mock := &mockClipboard{
+		checkFunc:  func() ([]byte, string, error) { return nil, filePath, nil },
+		updateFunc: func(wsl, win string) error { t.Fatal("UpdateClipboard should not run for managed path refresh"); return nil },
+	}
+
+	if err := poll(mock, testLogger(), dir); err != nil {
+		t.Fatalf("poll() returned error: %v", err)
+	}
+
+	if string(synced) != string(imgData) {
+		t.Fatalf("syncLinuxClipboardImage got %q, want %q", synced, imgData)
+	}
+}
+
 func TestRun_ShutdownClosesLatestClient(t *testing.T) {
 	overrideWslPath(t, fakeWslPath)
 	checkErr := errors.New("persistent error")
@@ -305,9 +391,9 @@ func TestRun_ShutdownClosesLatestClient(t *testing.T) {
 	factory := func() (Clipboard, error) {
 		mu.Lock()
 		defer mu.Unlock()
-		m := &mockClipboard{
-			checkFunc: func() ([]byte, error) { return nil, checkErr },
-		}
+			m := &mockClipboard{
+				checkFunc: func() ([]byte, string, error) { return nil, "", checkErr },
+			}
 		clients = append(clients, m)
 		return m, nil
 	}
@@ -351,9 +437,9 @@ func TestIntegration_SignalCausesCloseAndExit(t *testing.T) {
 
 	var pollCount atomic.Int32
 	mock := &mockClipboard{
-		checkFunc: func() ([]byte, error) {
+		checkFunc: func() ([]byte, string, error) {
 			pollCount.Add(1)
-			return nil, nil // no image
+			return nil, "", nil // no image
 		},
 	}
 

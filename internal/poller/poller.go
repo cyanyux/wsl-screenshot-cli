@@ -3,6 +3,7 @@ package poller
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -10,19 +11,24 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/cyanyux/wsl-screenshot-cli/internal/linuxclipboard"
 )
 
 const maxConsecutiveErrors = 5
 
 // Clipboard abstracts clipboard operations for testability.
 type Clipboard interface {
-	Check() ([]byte, error)
+	Check() ([]byte, string, error)
 	UpdateClipboard(wslPath, winPath string) error
 	Close() error
 }
 
 // ClientFactory creates a new Clipboard client.
 type ClientFactory func() (Clipboard, error)
+
+var syncLinuxClipboardImage = linuxclipboard.SyncImage
+var lastLinuxClipboardPath string
 
 // Run polls the clipboard at the given interval until the context is cancelled.
 func Run(ctx context.Context, logger *log.Logger, interval int, outputDir string, newClient ClientFactory) error {
@@ -66,12 +72,34 @@ func Run(ctx context.Context, logger *log.Logger, interval int, outputDir string
 
 // poll performs a single clipboard check cycle: check -> hash -> dedup -> save -> update.
 func poll(client Clipboard, logger *log.Logger, outputDir string) error {
-	pngData, err := client.Check()
+	pngData, managedPath, err := client.Check()
 	if err != nil {
 		return fmt.Errorf("check clipboard: %w", err)
 	}
-	if pngData == nil {
+	if pngData == nil && managedPath == "" {
+		lastLinuxClipboardPath = ""
 		return nil // no image in clipboard
+	}
+
+	if managedPath != "" {
+		if managedPath == lastLinuxClipboardPath {
+			return nil
+		}
+
+		pngData, err := os.ReadFile(managedPath)
+		if err != nil {
+			logger.Printf("Warning: managed clipboard path unreadable: %v", err)
+			return nil
+		}
+
+		if err := syncLinuxClipboardImage(logger, pngData); err != nil && !errors.Is(err, linuxclipboard.ErrUnavailable) {
+			logger.Printf("Warning: Linux clipboard image sync failed: %v", err)
+			return nil
+		}
+
+		lastLinuxClipboardPath = managedPath
+		logger.Printf("Linux clipboard refreshed from managed path: %s", managedPath)
+		return nil
 	}
 
 	hash := hashBytes(pngData)
@@ -103,6 +131,11 @@ func poll(client Clipboard, logger *log.Logger, outputDir string) error {
 		return nil // file saved, just can't update clipboard
 	}
 
+	if err := syncLinuxClipboardImage(logger, pngData); err != nil && !errors.Is(err, linuxclipboard.ErrUnavailable) {
+		logger.Printf("Warning: Linux clipboard image sync failed: %v", err)
+	}
+
+	lastLinuxClipboardPath = filePath
 	logger.Printf("Clipboard updated (WSL: %s)", filePath)
 	return nil
 }

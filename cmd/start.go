@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nailuu/wsl-screenshot-cli/internal/clipboard"
-	"github.com/nailuu/wsl-screenshot-cli/internal/daemon"
-	"github.com/nailuu/wsl-screenshot-cli/internal/platform"
-	"github.com/nailuu/wsl-screenshot-cli/internal/poller"
-	versioncheck "github.com/nailuu/wsl-screenshot-cli/internal/version"
+	"github.com/cyanyux/wsl-screenshot-cli/internal/clipboard"
+	"github.com/cyanyux/wsl-screenshot-cli/internal/daemon"
+	"github.com/cyanyux/wsl-screenshot-cli/internal/platform"
+	"github.com/cyanyux/wsl-screenshot-cli/internal/poller"
+	versioncheck "github.com/cyanyux/wsl-screenshot-cli/internal/version"
 )
 
 var interval int

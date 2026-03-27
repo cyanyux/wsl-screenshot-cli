@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nailuu/wsl-screenshot-cli/internal/daemon"
+	"github.com/cyanyux/wsl-screenshot-cli/internal/daemon"
 )
 
 var statusCmd = &cobra.Command{

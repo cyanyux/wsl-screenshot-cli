@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nailuu/wsl-screenshot-cli/internal/daemon"
+	"github.com/cyanyux/wsl-screenshot-cli/internal/daemon"
 )
 
-const installScriptURL = "https://nailu.dev/wscli/install.sh"
+const installScriptURL = "https://raw.githubusercontent.com/cyanyux/wsl-screenshot-cli/main/scripts/install.sh"
 
 var updateCmd = &cobra.Command{
 	Use:   "update",

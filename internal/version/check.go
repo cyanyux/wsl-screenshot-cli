@@ -12,7 +12,7 @@ import (
 
 // apiURL is the GitHub releases API endpoint, declared as a var so tests can
 // override it with an httptest server (same pattern as internal/poller).
-var apiURL = "https://api.github.com/repos/Nailuu/wsl-screenshot-cli/releases/latest"
+var apiURL = "https://api.github.com/repos/cyanyux/wsl-screenshot-cli/releases/latest"
 
 type githubRelease struct {
 	TagName string `json:"tag_name"`

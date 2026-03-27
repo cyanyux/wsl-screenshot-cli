@@ -5,7 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/nailuu/wsl-screenshot-cli/cmd"
+	"github.com/cyanyux/wsl-screenshot-cli/cmd"
 )
 
 func main() {

@@ -24,12 +24,15 @@ by sending CHECK commands; PowerShell uses pre-compiled .NET Clipboard APIs
 (System.Windows.Forms.Clipboard) for change detection — no runtime C#
 compilation, so it works even when EDR products block csc.exe. DoEvents()
 pumps Windows messages to keep the STA thread responsive. When a new bitmap
-is detected, it saves the PNG (deduplicated by SHA256 hash) and sets three
-clipboard formats at once:
+is detected, it saves the PNG (deduplicated by SHA256 hash), sets three
+Windows clipboard formats at once, and mirrors the image into the Linux
+clipboard when a supported backend is available:
 
   CF_UNICODETEXT  — WSL path to the PNG, so you can paste in WSL terminals
   CF_BITMAP       — the original image data, preserving normal image paste
   CF_HDROP        — Windows UNC path as a file drop, preserving paste-as-file
+  image/png       — Linux clipboard image data for WSL apps that read the
+                    native clipboard API on Ctrl+V
 
 After a screenshot, you can paste the file path in a WSL terminal and still
 paste normally in Windows applications.`,

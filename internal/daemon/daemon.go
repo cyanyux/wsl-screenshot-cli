@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // Output is the writer for user-facing messages. Tests can set it to io.Discard.
@@ -54,8 +55,7 @@ func RunningPID() int {
 		return 0
 	}
 
-	// Signal 0 checks if the process is alive without actually sending a signal
-	if err := proc.Signal(syscall.Signal(0)); err != nil {
+	if !processAlive(proc, pid) {
 		os.Remove(PidFile) // stale PID file (e.g. after WSL restart), clean up
 		return 0
 	}
@@ -163,6 +163,48 @@ func Stop() {
 		return
 	}
 
-	os.Remove(PidFile)
-	fmt.Fprintf(Output, "Polling process stopped successfully (PID %d)\n", pid)
+	// Keep the PID file in place until the daemon actually exits so a fast
+	// stop/start sequence cannot launch a second copy while the first one is
+	// still shutting down.
+	for i := 0; i < 50; i++ {
+		if !processAlive(proc, pid) {
+			os.Remove(PidFile)
+			fmt.Fprintf(Output, "Polling process stopped successfully (PID %d)\n", pid)
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	fmt.Fprintf(Output, "Polling process is still stopping (PID %d)\n", pid)
+}
+
+func processAlive(proc *os.Process, pid int) bool {
+	// Signal 0 checks if the process exists without actually sending a signal.
+	// A zombie can still satisfy this check, so we explicitly treat state Z as
+	// not alive because it can no longer do work and only awaits reaping.
+	if err := proc.Signal(syscall.Signal(0)); err != nil {
+		return false
+	}
+
+	state, err := processState(pid)
+	if err != nil {
+		return true
+	}
+	return state != 'Z'
+}
+
+func processState(pid int) (byte, error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return 0, err
+	}
+
+	// /proc/<pid>/stat format is: pid (comm) state ...
+	// comm may contain spaces, so find the final ") " delimiter first.
+	stat := string(data)
+	idx := strings.LastIndex(stat, ") ")
+	if idx == -1 || idx+2 >= len(stat) {
+		return 0, fmt.Errorf("unexpected /proc stat format")
+	}
+	return stat[idx+2], nil
 }
